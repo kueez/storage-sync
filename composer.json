@@ -18,5 +18,9 @@
             "Yoto\\StorageSync\\": "src/"
         }
     },
+    "dist": {
+        "url": "git@bitbucket.org:yotogroup/storage-sync.git",
+        "type": "git"
+    },
     "minimum-stability": "stable"
 }
