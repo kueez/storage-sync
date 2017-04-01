@@ -1,0 +1,22 @@
+{
+    "name": "yotogroup/storage-sync",
+    "description": "Laravel package for syncing local and remote disks",
+    "authors": [
+        {
+            "name": "Daniel Tony",
+            "email": "tony@kueez.com"
+        }
+    ],
+    "require": {
+        "php": ">=5.5.9",
+        "illuminate/support": "~5.3|~5.4",
+        "illuminate/filesystem": "~5.3|~5.4",
+        "illuminate/console": "~5.3|~5.4"
+    },
+    "autoload": {
+        "psr-4": {
+            "Yoto\\StorageSync\\": "src/"
+        }
+    },
+    "minimum-stability": "stable"
+}
