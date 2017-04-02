@@ -11,7 +11,7 @@ class StorageSyncRemote extends Command
      *
      * @var string
      */
-    protected $signature = 'storage:sync:remote {disk} {--local=default : Local filesystem to sync from. Defaults to local filesystem of chosen disk}';
+    protected $signature = 'storage:sync:remote {disk} {--remote=default : Remote filesystem to sync to. Defaults to remote filesystem of chosen disk}';
 
     /**
      * The console command description.
@@ -28,13 +28,13 @@ class StorageSyncRemote extends Command
     public function handle()
     {
         $disk = $this->argument('disk');
-        $localFilesystem = $this->option('local') == 'default' ? null : app('filesystem')->disk($this->option('local'));
+        $remoteFilesystem = $this->option('remote') == 'default' ? null : app('filesystem')->disk($this->option('remote'));
         $service = app('storagesync')->disk($disk);
 
         if ($this->confirm('Are you  sure? [yes|no]')) {
             $this->info('Syncing remote '.$disk.' from local...');
 
-            $result = $service->syncRemoteDirectory('', true, $localFilesystem, false, function ($operation, $path) {
+            $result = $service->syncRemoteDirectory('', true, $remoteFilesystem, false, function ($operation, $path) {
                 $this->line($operation . ': ' . $path);
             });
 

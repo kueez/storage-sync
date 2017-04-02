@@ -199,7 +199,14 @@ class Disk
         $contents = $disk->get($path);
 
         if ($contents) {
-            return $this->local->getDriver()->write($path, $contents);
+            $writeResult = $this->local->getDriver()->write($path, $contents);
+
+            if ($writeResult) {
+                $localPath = $this->local->getDriver()->getAdapter()->applyPathPrefix($path);
+                @chmod($localPath, 0775);
+            }
+
+            return $writeResult;
         }
 
         if ($delete) {
@@ -242,6 +249,10 @@ class Disk
 
                         return false;
                     }
+
+                    // set file permissions
+                    $localPath = $this->local->getDriver()->getAdapter()->applyPathPrefix($remoteFile['path']);
+                    @chmod($localPath, 0775);
 
                     if (is_callable($operationCallback)) {
                         $operationCallback('write', $remoteFile['path']);
