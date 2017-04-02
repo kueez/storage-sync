@@ -3,8 +3,6 @@
 namespace Yoto\StorageSync;
 
 use Illuminate\Console\Command;
-use Storage;
-use StorageSync;
 
 class StorageSyncRemote extends Command
 {
@@ -30,8 +28,8 @@ class StorageSyncRemote extends Command
     public function handle()
     {
         $disk = $this->argument('disk');
-        $localFilesystem = $this->option('local') == 'default' ? null : Storage::disk($this->option('local'));
-        $service = StorageSync::disk($disk);
+        $localFilesystem = $this->option('local') == 'default' ? null : app('filesystem')->disk($this->option('local'));
+        $service = app('storagesync')->disk($disk);
 
         if ($this->confirm('Are you  sure? [yes|no]')) {
             $this->info('Syncing remote '.$disk.' from local...');
