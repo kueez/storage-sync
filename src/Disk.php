@@ -365,7 +365,7 @@ class Disk
                     $disk->delete($remoteFile['path']);
 
                     if (is_callable($operationCallback)) {
-                        $operationCallback('write', $remoteFile['path']);
+                        $operationCallback('delete', $remoteFile['path']);
                     }
                 }
             }
