@@ -410,6 +410,10 @@ class Disk
             $config['ContentType'] = 'application/font-woff';
         }
 
+        else if (ends_with($path, '.woff2')) {
+            $config['ContentType'] = 'application/font-woff2';
+        }
+
         return $disk->getDriver()->write($path, $contents, $config);
     }
 
