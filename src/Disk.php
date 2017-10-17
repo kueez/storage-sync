@@ -375,6 +375,26 @@ class Disk
     }
 
     /**
+     * Get local disk instance
+     *
+     * @return FilesystemAdapter
+     */
+    public function getLocaleDisk()
+    {
+        return $this->local;
+    }
+
+    /**
+     * Get remote disk instance
+     *
+     * @return FilesystemAdapter
+     */
+    public function getRemoteDisk()
+    {
+        return $this->remote;
+    }
+
+    /**
      * Write file to disk
      *
      * @param $path
