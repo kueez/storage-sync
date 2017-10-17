@@ -379,7 +379,7 @@ class Disk
      *
      * @return FilesystemAdapter
      */
-    public function getLocaleDisk()
+    public function getLocalDisk()
     {
         return $this->local;
     }
