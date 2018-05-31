@@ -41,20 +41,20 @@ class StorageSync
      *
      * @param $name
      * @return Disk
-     * @throws \Exception
+     * @throws StorageSyncException
      */
     public function disk($name)
     {
         if (!isset($this->disks[$name])) {
             if (!isset($this->mapping[$name])) {
-                throw new \Exception('StorageSync: disk '.$name.' does not exist.');
+                throw new StorageSyncException('StorageSync: disk '.$name.' does not exist.');
             }
 
             $localDisk = $this->mapping[$name]['local'];
             $remoteDisk = $this->mapping[$name]['remote'];
 
             if ($remoteDisk == $localDisk) {
-                throw new \Exception('StorageSync: local and remote cannot be the same disk.');
+                throw new StorageSyncException('StorageSync: local and remote cannot be the same disk.');
             }
 
             $local = $this->manager->disk($localDisk);
