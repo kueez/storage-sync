@@ -66,11 +66,16 @@ class Disk
 
             // only if path includes dot 
             if ($getFromRemoteIfAbsent && str_contains($path, '.') && !$this->local->exists($path)) {
-                $remote = $this->remote->get($path);
+                try {
+                    $remote = $this->remote->get($path);
 
-                if ($remote) {
-                    $this->local->getDriver()->write($path, $remote);
+                    if ($remote) {
+                        $this->local->getDriver()->write($path, $remote);
+                    }
+                } catch (\Throwable $e) {
+                    app('log')->error($e);
                 }
+
             }
         }
 
