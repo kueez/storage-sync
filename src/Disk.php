@@ -53,7 +53,7 @@ class Disk
 
 
     /**
-     * @param bool $path
+     * @param string $path
      * @param bool $getFromRemoteIfAbsent
      * @return string
      */
@@ -64,8 +64,8 @@ class Disk
         if ($path) {
             $full .= '/'.$path;
 
-            // only if path includes dot 
-            if ($getFromRemoteIfAbsent && str_contains($path, '.') && !$this->local->exists($path)) {
+            // only if path includes dot
+            if ($getFromRemoteIfAbsent && str_contains($path, '.') && ($getFromRemoteIfAbsent === 'force' || !$this->local->exists($path))) {
                 $remote = $this->remote->get($path);
 
                 if ($remote) {
