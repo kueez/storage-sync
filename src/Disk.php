@@ -240,7 +240,7 @@ class Disk
                 return $file['path'] === $remoteFile['path'];
             });
 
-            if (!$localFile || ($forceRewrite || $localFile['size'] !== $remoteFile['size'])) {
+            if (!$localFile || ($forceRewrite || intval($localFile['size']) !== intval($remoteFile['size']))) {
                 $contents = $disk->get($remoteFile['path']);
 
                 if ($contents) {
@@ -332,7 +332,7 @@ class Disk
                 return $file['path'] === $localFile['path'];
             });
 
-            if (!$remoteFile || ($forceRewrite || $remoteFile['size'] !== $localFile['size'])) {
+            if (!$remoteFile || ($forceRewrite || intval($remoteFile['size']) !== intval($localFile['size']))) {
                 // disallow files
                 if (starts_with($localFile['path'], '.') || ends_with($localFile['path'], ['.map'])) {
                     continue;
