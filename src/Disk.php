@@ -28,19 +28,26 @@ class Disk
     protected $localPath;
 
     /**
+     * @var FilesystemAdapter[]
+     */
+    protected $remoteReplicas;
+
+    /**
      * Disk constructor.
      *
      * @param FilesystemAdapter $local
      * @param FilesystemAdapter $remote
      * @param string $baseUrl
      * @param string $localPath
+     * @param array $remoteReplicas
      */
-    public function __construct(FilesystemAdapter $local, FilesystemAdapter $remote, $baseUrl, $localPath)
+    public function __construct(FilesystemAdapter $local, FilesystemAdapter $remote, $baseUrl, $localPath, array $remoteReplicas = [])
     {
         $this->local = $local;
         $this->remote = $remote;
         $this->baseUrl = $baseUrl;
         $this->localPath = $localPath;
+        $this->remoteReplicas = $remoteReplicas;
     }
 
     /**
@@ -132,21 +139,28 @@ class Disk
     {
         $local = $this->local->getDriver()->write($path, $contents);
 
-        if ($local) {
-            $remote = $this->write($path, $contents, $this->remote);
-
-            if ($remote) {
-                return true;
-            }
-
-            app('log')->error('Failed to put '.$path.' on remote');
-        }
-
-        else {
+        if (!$local) {
             app('log')->error('Failed to put '.$path.' on local');
+            return false;
         }
 
-        return false;
+        $remote = $this->write($path, $contents, $this->remote);
+
+        if (!$remote) {
+            app('log')->error('Failed to put '.$path.' on remote');
+            return false;
+        }
+
+        foreach ($this->remoteReplicas as  $remoteReplica) {
+            $remoteReplicaRes = $this->write($path, $contents, $remoteReplica);
+
+            if (!$remoteReplicaRes) {
+                app('log')->error('Failed to put '.$path.' on remote replica');
+                return false;
+            }
+        }
+
+        return true;
     }
 
     /**
@@ -157,10 +171,21 @@ class Disk
      */
     public function delete($path)
     {
-        $local = @$this->local->delete($path);
-        $remote = @$this->remote->delete($path);
+        $responses = [];
+        $responses[] = @$this->local->delete($path);
+        $responses[] = @$this->remote->delete($path);
 
-        return $local && $remote;
+        foreach($this->remoteReplicas as $remoteReplica) {
+            $responses[] = @$remoteReplica->delete($path);
+        }
+
+        foreach($responses as $response) {
+            if (!$response) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     /**
@@ -176,10 +201,21 @@ class Disk
             throw new StorageSyncException('Cannot delete root directory.');
         }
 
-        $local = @$this->local->deleteDirectory($path);
-        $remote = @$this->remote->deleteDirectory($path);
+        $responses = [];
+        $responses[] = @$this->local->deleteDirectory($path);
+        $responses[] = @$this->remote->deleteDirectory($path);
 
-        return $local && $remote;
+        foreach($this->remoteReplicas as $remoteReplica) {
+            $responses[] = @$remoteReplica->deleteDirectory($path);
+        }
+
+        foreach($responses as $response) {
+            if (!$response) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     /**
@@ -298,11 +334,37 @@ class Disk
         $contents = $this->local->get($path);
 
         if ($contents) {
-            return $this->write($path, $contents, $disk);
+            $responses = [];
+            $responses[] = $this->write($path, $contents, $disk);
+
+            foreach($this->remoteReplicas as $remoteReplica) {
+                $responses[] = $this->write($path, $contents, $remoteReplica);
+            }
+
+            foreach($responses as $response) {
+                if (!$response) {
+                    return false;
+                }
+            }
+
+            return true;
         }
 
         if ($delete) {
-            return @$disk->delete($path);
+            $responses = [];
+            $responses[] = @$disk->delete($path);
+
+            foreach($this->remoteReplicas as $remoteReplica) {
+                $responses[] = @$remoteReplica->delete($path);
+            }
+
+            foreach($responses as $response) {
+                if (!$response) {
+                    return false;
+                }
+            }
+
+            return true;
         }
 
         return false;
@@ -343,8 +405,14 @@ class Disk
                 if ($contents) {
                     if (!$this->write($localFile['path'], $contents, $disk)) {
                         app('log')->error('Cannot write to '.$localFile['path'].' on remote from local path');
-
                         return false;
+                    }
+
+                    foreach($this->remoteReplicas as $remoteReplica) {
+                        if (!$this->write($localFile['path'], $contents, $remoteReplica)) {
+                            app('log')->error('Cannot write to '.$localFile['path'].' on remote replica from local path');
+                            return false;
+                        }
                     }
 
                     if (is_callable($operationCallback)) {
@@ -363,6 +431,10 @@ class Disk
                 // if not in local and not first level file, delete it.
                 if (!$localFile && str_contains($remoteFile['path'], '/')) {
                     $disk->delete($remoteFile['path']);
+
+                    foreach($this->remoteReplicas as $remoteReplica) {
+                        @$remoteReplica->delete($remoteFile['path']);
+                    }
 
                     if (is_callable($operationCallback)) {
                         $operationCallback('delete', $remoteFile['path']);
