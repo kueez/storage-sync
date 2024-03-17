@@ -61,8 +61,17 @@ class StorageSync
             $remote = $this->manager->disk($remoteDisk);
             $baseUrl = config('filesystems.disks.'.$remoteDisk.'.base_url');
             $localPath = config('filesystems.disks.'.$localDisk.'.root');
+            $remoteReplicas = [];
 
-            $this->disks[$name] = new Disk($local, $remote, $baseUrl, $localPath);
+            if (!empty($this->mapping[$name]['enable_remote_replicas']) &&
+                $this->mapping[$name]['enable_remote_replicas'] &&
+                !empty($this->mapping[$name]['remote_replicas'])) {
+                foreach ($this->mapping[$name]['remote_replicas'] as $remoteReplica) {
+                    $remoteReplicas[] = $this->manager->disk($remoteReplica);
+                }
+            }
+
+            $this->disks[$name] = new Disk($local, $remote, $baseUrl, $localPath, $remoteReplicas);
         }
 
         return $this->disks[$name];
