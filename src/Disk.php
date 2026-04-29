@@ -3,7 +3,9 @@
 namespace Yoto\StorageSync;
 
 use Illuminate\Filesystem\FilesystemAdapter;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Str;
 
 class Disk
 {
@@ -72,7 +74,7 @@ class Disk
             $full .= '/'.$path;
 
             // only if path includes dot
-            if ($getFromRemoteIfAbsent && str_contains($path, '.') && ($getFromRemoteIfAbsent === 'force' || !$this->local->exists($path))) {
+            if ($getFromRemoteIfAbsent && Str::contains($path, '.') && ($getFromRemoteIfAbsent === 'force' || !$this->local->exists($path))) {
                 $remote = $this->remote->get($path);
 
                 if ($remote) {
@@ -272,7 +274,7 @@ class Disk
         $local = $this->filterFiles($this->local->getDriver()->listContents($path, true));
 
         foreach ($remote as $remoteFile) {
-            $localFile = array_first($local, function($file) use($remoteFile) {
+            $localFile = Arr::first($local, function($file) use($remoteFile) {
                 return $file['path'] === $remoteFile['path'];
             });
 
@@ -299,12 +301,11 @@ class Disk
 
         if ($delete) {
             foreach ($local as $localFile) {
-                $remoteFile = array_first($remote, function($file) use($localFile) {
+                $remoteFile = Arr::first($remote, function($file) use($localFile) {
                     return $file['path'] === $localFile['path'];
                 });
 
-                // if not in local and not first level file, delete it.
-                if (!$remoteFile && str_contains($localFile['path'], '/')) {
+                if (!$remoteFile && Str::contains($localFile['path'], '/')) {
                     if ($this->local->delete($localFile['path'])) {
                         if (is_callable($operationCallback)) {
                             $operationCallback('delete', $localFile['path']);
@@ -390,13 +391,12 @@ class Disk
         $local = $this->filterFiles($this->local->getDriver()->listContents($path, true));
 
         foreach ($local as $localFile) {
-            $remoteFile = array_first($remote, function($file) use($localFile) {
+            $remoteFile = Arr::first($remote, function($file) use($localFile) {
                 return $file['path'] === $localFile['path'];
             });
 
             if (!$remoteFile || ($forceRewrite || intval($remoteFile['size']) !== intval($localFile['size']))) {
-                // disallow files
-                if (starts_with($localFile['path'], '.') || ends_with($localFile['path'], ['.map'])) {
+                if (Str::startsWith($localFile['path'], '.') || Str::endsWith($localFile['path'], ['.map'])) {
                     continue;
                 }
 
@@ -424,12 +424,11 @@ class Disk
 
         if ($delete) {
             foreach ($remote as $remoteFile) {
-                $localFile = array_first($local, function($file) use($remoteFile) {
+                $localFile = Arr::first($local, function($file) use($remoteFile) {
                     return $file['path'] === $remoteFile['path'];
                 });
 
-                // if not in local and not first level file, delete it.
-                if (!$localFile && str_contains($remoteFile['path'], '/')) {
+                if (!$localFile && Str::contains($remoteFile['path'], '/')) {
                     $disk->delete($remoteFile['path']);
 
                     foreach($this->remoteReplicas as $remoteReplica) {
@@ -478,11 +477,9 @@ class Disk
     {
         $config = [];
 
-        if (ends_with($path, '.woff')) {
+        if (Str::endsWith($path, '.woff')) {
             $config['ContentType'] = 'application/font-woff';
-        }
-
-        else if (ends_with($path, '.woff2')) {
+        } elseif (Str::endsWith($path, '.woff2')) {
             $config['ContentType'] = 'application/font-woff2';
         }
 
