@@ -6,6 +6,9 @@ use Illuminate\Filesystem\FilesystemAdapter;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
+use League\Flysystem\FileAttributes;
+use League\Flysystem\FilesystemException;
+use League\Flysystem\StorageAttributes;
 
 class Disk
 {
@@ -75,10 +78,10 @@ class Disk
 
             // only if path includes dot
             if ($getFromRemoteIfAbsent && Str::contains($path, '.') && ($getFromRemoteIfAbsent === 'force' || !$this->local->exists($path))) {
-                $remote = $this->remote->get($path);
+                $remote = $this->read($path, $this->remote);
 
                 if ($remote) {
-                    $this->local->getDriver()->write($path, $remote);
+                    $this->writeLocal($path, $remote);
                 }
             }
         }
@@ -113,16 +116,16 @@ class Disk
      */
     public function get($path)
     {
-        $local = $this->local->get($path);
+        $local = $this->read($path, $this->local);
 
         if ($local) {
             return $local;
         }
 
-        $remote = $this->remote->get($path);
+        $remote = $this->read($path, $this->remote);
 
         if ($remote) {
-            $this->local->getDriver()->write($path, $remote);
+            $this->writeLocal($path, $remote);
 
             return $remote;
         }
@@ -139,7 +142,7 @@ class Disk
      */
     public function put($path, $contents)
     {
-        $local = $this->local->getDriver()->write($path, $contents);
+        $local = $this->writeLocal($path, $contents);
 
         if (!$local) {
             app('log')->error('Failed to put '.$path.' on local');
@@ -174,11 +177,11 @@ class Disk
     public function delete($path)
     {
         $responses = [];
-        $responses[] = @$this->local->delete($path);
-        $responses[] = @$this->remote->delete($path);
+        $responses[] = $this->deleteQuietly($path, $this->local);
+        $responses[] = $this->deleteQuietly($path, $this->remote);
 
         foreach($this->remoteReplicas as $remoteReplica) {
-            $responses[] = @$remoteReplica->delete($path);
+            $responses[] = $this->deleteQuietly($path, $remoteReplica);
         }
 
         foreach($responses as $response) {
@@ -204,11 +207,11 @@ class Disk
         }
 
         $responses = [];
-        $responses[] = @$this->local->deleteDirectory($path);
-        $responses[] = @$this->remote->deleteDirectory($path);
+        $responses[] = $this->deleteDirectoryQuietly($path, $this->local);
+        $responses[] = $this->deleteDirectoryQuietly($path, $this->remote);
 
         foreach($this->remoteReplicas as $remoteReplica) {
-            $responses[] = @$remoteReplica->deleteDirectory($path);
+            $responses[] = $this->deleteDirectoryQuietly($path, $remoteReplica);
         }
 
         foreach($responses as $response) {
@@ -234,13 +237,13 @@ class Disk
             $disk = $this->remote;
         }
 
-        $contents = $disk->get($path);
+        $contents = $this->read($path, $disk);
 
         if ($contents) {
-            $writeResult = $this->local->getDriver()->write($path, $contents);
+            $writeResult = $this->writeLocal($path, $contents);
 
             if ($writeResult) {
-                $localPath = $this->local->getDriver()->getAdapter()->applyPathPrefix($path);
+                $localPath = $this->local->path($path);
                 @chmod($localPath, 0775);
             }
 
@@ -248,7 +251,7 @@ class Disk
         }
 
         if ($delete) {
-            return @$this->local->delete($path);
+            return $this->deleteQuietly($path, $this->local);
         }
 
         return false;
@@ -279,17 +282,17 @@ class Disk
             });
 
             if (!$localFile || ($forceRewrite || intval($localFile['size']) !== intval($remoteFile['size']))) {
-                $contents = $disk->get($remoteFile['path']);
+                $contents = $this->read($remoteFile['path'], $disk);
 
                 if ($contents) {
-                    if (!$this->local->getDriver()->write($remoteFile['path'], $contents)) {
+                    if (!$this->writeLocal($remoteFile['path'], $contents)) {
                         app('log')->error('Cannot write to '.$remoteFile['path'].' on local from remote path');
 
                         return false;
                     }
 
                     // set file permissions
-                    $localPath = $this->local->getDriver()->getAdapter()->applyPathPrefix($remoteFile['path']);
+                    $localPath = $this->local->path($remoteFile['path']);
                     @chmod($localPath, 0775);
 
                     if (is_callable($operationCallback)) {
@@ -306,7 +309,7 @@ class Disk
                 });
 
                 if (!$remoteFile && Str::contains($localFile['path'], '/')) {
-                    if ($this->local->delete($localFile['path'])) {
+                    if ($this->deleteQuietly($localFile['path'], $this->local)) {
                         if (is_callable($operationCallback)) {
                             $operationCallback('delete', $localFile['path']);
                         }
@@ -332,7 +335,7 @@ class Disk
             $disk = $this->remote;
         }
 
-        $contents = $this->local->get($path);
+        $contents = $this->read($path, $this->local);
 
         if ($contents) {
             $responses = [];
@@ -353,10 +356,10 @@ class Disk
 
         if ($delete) {
             $responses = [];
-            $responses[] = @$disk->delete($path);
+            $responses[] = $this->deleteQuietly($path, $disk);
 
             foreach($this->remoteReplicas as $remoteReplica) {
-                $responses[] = @$remoteReplica->delete($path);
+                $responses[] = $this->deleteQuietly($path, $remoteReplica);
             }
 
             foreach($responses as $response) {
@@ -400,7 +403,7 @@ class Disk
                     continue;
                 }
 
-                $contents = $this->local->get($localFile['path']);
+                $contents = $this->read($localFile['path'], $this->local);
 
                 if ($contents) {
                     if (!$this->write($localFile['path'], $contents, $disk)) {
@@ -429,10 +432,10 @@ class Disk
                 });
 
                 if (!$localFile && Str::contains($remoteFile['path'], '/')) {
-                    $disk->delete($remoteFile['path']);
+                    $this->deleteQuietly($remoteFile['path'], $disk);
 
                     foreach($this->remoteReplicas as $remoteReplica) {
-                        @$remoteReplica->delete($remoteFile['path']);
+                        $this->deleteQuietly($remoteFile['path'], $remoteReplica);
                     }
 
                     if (is_callable($operationCallback)) {
@@ -483,20 +486,99 @@ class Disk
             $config['ContentType'] = 'application/font-woff2';
         }
 
-        return $disk->getDriver()->write($path, $contents, $config);
+        try {
+            $disk->getDriver()->write($path, $contents, $config);
+
+            return true;
+        } catch (FilesystemException $exception) {
+            return false;
+        }
+    }
+
+    /**
+     * Write file to local disk
+     *
+     * @param $path
+     * @param $contents
+     * @return bool
+     */
+    protected function writeLocal($path, $contents)
+    {
+        try {
+            $this->local->getDriver()->write($path, $contents);
+
+            return true;
+        } catch (FilesystemException $exception) {
+            return false;
+        }
+    }
+
+    /**
+     * Read file contents from disk
+     *
+     * @param $path
+     * @param FilesystemAdapter $disk
+     * @return string|false
+     */
+    protected function read($path, FilesystemAdapter $disk)
+    {
+        try {
+            return $disk->getDriver()->read($path);
+        } catch (FilesystemException $exception) {
+            return false;
+        }
+    }
+
+    /**
+     * Delete file from disk without raising errors
+     *
+     * @param $path
+     * @param FilesystemAdapter $disk
+     * @return bool
+     */
+    protected function deleteQuietly($path, FilesystemAdapter $disk)
+    {
+        try {
+            $disk->getDriver()->delete($path);
+
+            return true;
+        } catch (FilesystemException $exception) {
+            return false;
+        }
+    }
+
+    /**
+     * Delete directory from disk without raising errors
+     *
+     * @param $path
+     * @param FilesystemAdapter $disk
+     * @return bool
+     */
+    protected function deleteDirectoryQuietly($path, FilesystemAdapter $disk)
+    {
+        try {
+            $disk->getDriver()->deleteDirectory($path);
+
+            return true;
+        } catch (FilesystemException $exception) {
+            return false;
+        }
     }
 
     /**
      * Filter files
      *
-     * @param  array  $contents
+     * @param  iterable  $contents
      * @return array
      */
     protected function filterFiles($contents)
     {
         return Collection::make($contents)
             ->filter(function($object) {
-                return $object && isset($object['type']) && $object['type'] == 'file' && !empty($object['filename']);
+                return $object instanceof StorageAttributes && $object->isFile() && !empty(pathinfo($object->path(), PATHINFO_FILENAME));
+            })
+            ->map(function(FileAttributes $file) {
+                return ['path' => $file->path(), 'size' => $file->fileSize()];
             })
             ->values()
             ->all();
